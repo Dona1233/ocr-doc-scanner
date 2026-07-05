@@ -12,6 +12,7 @@ app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "output"
+POPPLER_PATH = r"C:\Program Files\poppler\poppler-26.02.0\Library\bin"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
@@ -69,17 +70,26 @@ def upload():
         image = Image.open(filepath).convert("RGB")
         try:
             processed = preprocess_image(image)
-            extracted_text = pytesseract.image_to_string(processed, config="--psm 6")
+            extracted_text = pytesseract.image_to_string(
+                processed,
+                config="--oem 3 --psm 6"
+            )
         except Exception as e:
             extracted_text = f"OCR Error: {e}"
 
     elif ext == "pdf":
         try:
-            pages = convert_from_path(filepath)
+            pages = convert_from_path(
+                filepath,
+                poppler_path=POPPLER_PATH
+            )
             page_texts = []
             for page_num, page_image in enumerate(pages, start=1):
                 processed = preprocess_image(page_image)
-                page_text = pytesseract.image_to_string(processed, config="--psm 6")
+                page_text = pytesseract.image_to_string(
+                    processed,
+                    config="--oem 3 --psm 6"
+                )
                 page_texts.append(f"--- Page {page_num} ---\n{page_text}")
             extracted_text = "\n\n".join(page_texts)
         except Exception as e:
