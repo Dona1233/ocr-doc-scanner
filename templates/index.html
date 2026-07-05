@@ -16,7 +16,10 @@
 
   {% if extracted_text %}
   <h3 class="mt-5">Extracted Text</h3>
-  <textarea class="form-control" rows="15">{{ extracted_text }}</textarea>
+  <textarea
+      class="form-control"
+      rows="15"
+      readonly>{{ extracted_text }}</textarea>
 
   <a href="/download" class="btn btn-success mt-3">Download as .txt</a>
   {% endif %}
