@@ -3,8 +3,11 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 from pdf2image import convert_from_path
 import pytesseract
+import cv2
+import numpy as np
 import os
 
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
@@ -13,6 +16,30 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 last_txt_filename = None  # track most recent output for /download
+
+
+def preprocess_image(pil_image):
+    """Grayscale, upscale, denoise, adaptive threshold.
+    Takes/returns PIL image so both jpg/png and pdf-page branches can reuse it."""
+    img = np.array(pil_image.convert("RGB"))
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # upscale 2x -- helps small/code-block text
+    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+
+    # denoise
+    gray = cv2.fastNlMeansDenoising(gray, h=30)
+
+    # adaptive threshold -- handles uneven lighting/screenshots better than global
+    thresh = cv2.adaptiveThreshold(
+        gray, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31, 2
+    )
+
+    return Image.fromarray(thresh)
 
 
 @app.route("/")
@@ -41,7 +68,8 @@ def upload():
     if ext in {"jpg", "jpeg", "png"}:
         image = Image.open(filepath).convert("RGB")
         try:
-            extracted_text = pytesseract.image_to_string(image)
+            processed = preprocess_image(image)
+            extracted_text = pytesseract.image_to_string(processed, config="--psm 6")
         except Exception as e:
             extracted_text = f"OCR Error: {e}"
 
@@ -50,7 +78,8 @@ def upload():
             pages = convert_from_path(filepath)
             page_texts = []
             for page_num, page_image in enumerate(pages, start=1):
-                page_text = pytesseract.image_to_string(page_image)
+                processed = preprocess_image(page_image)
+                page_text = pytesseract.image_to_string(processed, config="--psm 6")
                 page_texts.append(f"--- Page {page_num} ---\n{page_text}")
             extracted_text = "\n\n".join(page_texts)
         except Exception as e:
